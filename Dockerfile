@@ -34,7 +34,7 @@ COPY --link Directory.Build.props Directory.Build.props
 COPY --link Directory.Packages.props Directory.Packages.props
 COPY --link LICENSE.txt LICENSE.txt
 
-RUN --mount=type=secret,id=ASF_PRIVATE_SNK --mount=type=secret,id=STEAM_TOKEN_DUMPER_TOKEN <<EOF
+RUN <<EOF
     set -eu
 
     dotnet --info
@@ -51,25 +51,7 @@ RUN --mount=type=secret,id=ASF_PRIVATE_SNK --mount=type=secret,id=STEAM_TOKEN_DU
         *) echo "ERROR: Unsupported CPU architecture: ${TARGETARCH}"; exit 1 ;;
     esac
 
-    if [ -f "/run/secrets/ASF_PRIVATE_SNK" ]; then
-        base64 -d "/run/secrets/ASF_PRIVATE_SNK" > "resources/ArchiSteamFarm.snk"
-    else
-        echo "WARN: No ASF_PRIVATE_SNK provided!"
-    fi
-
     dotnet publish ArchiSteamFarm -c "$CONFIGURATION" -o "out" -p:ASFVariant=docker -p:ContinuousIntegrationBuild=true -p:UseAppHost=false -r "$asf_variant" --nologo --no-self-contained
-
-    if [ -f "/run/secrets/STEAM_TOKEN_DUMPER_TOKEN" ]; then
-        STEAM_TOKEN_DUMPER_TOKEN="$(cat "/run/secrets/STEAM_TOKEN_DUMPER_TOKEN")"
-
-        if [ -n "$STEAM_TOKEN_DUMPER_TOKEN" ] && [ -f "ArchiSteamFarm.OfficialPlugins.SteamTokenDumper/SharedInfo.cs" ]; then
-            sed -i "s/STEAM_TOKEN_DUMPER_TOKEN/${STEAM_TOKEN_DUMPER_TOKEN}/g" "ArchiSteamFarm.OfficialPlugins.SteamTokenDumper/SharedInfo.cs"
-        else
-            echo "WARN: STEAM_TOKEN_DUMPER_TOKEN not applied!"
-        fi
-    else
-        echo "WARN: No STEAM_TOKEN_DUMPER_TOKEN provided!"
-    fi
 
     for plugin in $PLUGINS_BUNDLED; do
         dotnet publish "$plugin" -c "$CONFIGURATION" -o "out/plugins/$plugin" -p:ASFVariant=docker -p:ContinuousIntegrationBuild=true -p:UseAppHost=false -r "$asf_variant" --nologo
@@ -109,6 +91,5 @@ RUN <<EOF
 EOF
 
 WORKDIR /app
-VOLUME ["/app/config", "/app/logs"]
 HEALTHCHECK CMD ["pidof", "-q", "dotnet"]
 ENTRYPOINT ["ArchiSteamFarm", "--no-restart", "--system-required"]
